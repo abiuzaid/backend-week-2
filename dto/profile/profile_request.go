@@ -1,8 +1,9 @@
 package profiledto
 
-type CreateProfileRequest struct {
-	ID      int    `json:"id" gorm:"primary_key:auto_increment"`
-	Phone   string `json:"phone" gorm:"type: varchar(255)"`
-	Gender  string `json:"gender" gorm:"type: varchar(255)"`
-	Address string `json:"address" gorm:"type: text"`
+type ProfileRequest struct {
+	ID      int    `json:"id" gorm:"primary_key:auto_increment" validate:"required"`
+	Photo   string `json:"photo" gorm:"type: varchar(255)" validate:"required"`
+	Phone   string `json:"phone" gorm:"type: varchar(255)" validate:"required"`
+	Address string `json:"address" gorm:"type: text" validate:"required"`
+	UserID  int    `json:"user_id"`
 }

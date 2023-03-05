@@ -8,8 +8,9 @@ import (
 
 type ProfileRepository interface {
 	GetProfile(ID int) (models.Profile, error)
-	FindProfile() ([]models.Profile, error)
-	CreateProfil(profil models.Profile) (models.Profile, error)
+	CreateProfile(profile models.Profile) (models.Profile, error)
+	UpdateProfile(profile models.Profile) (models.Profile, error)
+	DeleteProfile(profile models.Profile) (models.Profile, error)
 }
 
 func RepositoryProfile(db *gorm.DB) *repository {
@@ -17,21 +18,26 @@ func RepositoryProfile(db *gorm.DB) *repository {
 }
 
 func (r *repository) GetProfile(ID int) (models.Profile, error) {
-	var profil models.Profile
-	err := r.db.Preload("User").First(&profil, ID).Error
+	var profile models.Profile
+	err := r.db.Preload("User").First(&profile, ID).Error
 
-	return profil, err
+	return profile, err
 }
 
-func (r *repository) FindProfile() ([]models.Profile, error) {
-	var Profil []models.Profile
-	err := r.db.Preload("User").Find(&Profil).Error
+func (r *repository) CreateProfile(profile models.Profile) (models.Profile, error) {
+	err := r.db.Create(&profile).Error
 
-	return Profil, err
+	return profile, err
 }
 
-func (r *repository) CreateProfil(profil models.Profile) (models.Profile, error) {
-	err := r.db.Create(&profil).Error // Using Create method
+func (r *repository) UpdateProfile(profile models.Profile) (models.Profile, error) {
+	err := r.db.Save(&profile).Error
 
-	return profil, err
+	return profile, err
+}
+
+func (r *repository) DeleteProfile(profile models.Profile) (models.Profile, error) {
+	err := r.db.Delete(&profile).Scan(&profile).Error
+
+	return profile, err
 }

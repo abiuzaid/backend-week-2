@@ -9,4 +9,5 @@ func RouteInit(e *echo.Group) {
 	ProfileRoutes(e)
 	AuthRoutes(e)
 	CartRoutes(e)
+	TransactionRoutes(e)
 }

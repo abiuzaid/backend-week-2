@@ -15,22 +15,36 @@ import (
 
 type handlerTransaction struct {
 	TransactionRepository repositories.TransactionRepository
+	UserRepository        repositories.UserRepository
+	ProductRepository     repositories.ProductRepository
+	CartRepository        repositories.CartRepository
 }
 
-func HandlerTransaction(TransactionRepository repositories.TransactionRepository) *handlerTransaction {
-	return &handlerTransaction{TransactionRepository}
+func HandlerTransaction(TransactionRepository repositories.TransactionRepository, UserRepository repositories.UserRepository, ProductRepository repositories.ProductRepository, CartRepository repositories.CartRepository) *handlerTransaction {
+	return &handlerTransaction{
+		TransactionRepository: TransactionRepository,
+		UserRepository:        UserRepository,
+		ProductRepository:     ProductRepository,
+		CartRepository:        CartRepository,
+	}
 }
 
 func (h *handlerTransaction) FindTransactions(c echo.Context) error {
-	transactions, err := h.TransactionRepository.FindTransactions()
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, dto.ErrorResult{Code: http.StatusBadRequest, Message: err.Error()})
-	}
+	userLogin := c.Get("userLogin")
+	userAdmin := userLogin.(jwt.MapClaims)["is_admin"].(bool)
+	if userAdmin {
+		transactions, err := h.TransactionRepository.FindTransactions()
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, dto.ErrorResult{Code: http.StatusBadRequest, Message: err.Error()})
+		}
 
-	if len(transactions) > 0 {
-		return c.JSON(http.StatusOK, dto.SuccessResult{Code: http.StatusOK, Data: transactions})
+		if len(transactions) > 0 {
+			return c.JSON(http.StatusOK, dto.SuccessResult{Code: http.StatusOK, Data: transactions})
+		} else {
+			return c.JSON(http.StatusBadRequest, dto.ErrorResult{Code: http.StatusBadRequest, Message: "No record found"})
+		}
 	} else {
-		return c.JSON(http.StatusBadRequest, dto.ErrorResult{Code: http.StatusBadRequest, Message: err.Error()})
+		return c.JSON(http.StatusUnauthorized, dto.ErrorResult{Code: http.StatusUnauthorized, Message: "Sorry, you're not Admin"})
 	}
 }
 
@@ -59,12 +73,51 @@ func (h *handlerTransaction) CreateTransaction(c echo.Context) error {
 
 	userLogin := c.Get("userLogin")
 	userId := userLogin.(jwt.MapClaims)["id"].(float64)
-	productId, _ := strconv.Atoi(c.Param("product_id"))
+
+	user, err := h.UserRepository.GetUser(int(userId))
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, dto.ErrorResult{Code: http.StatusBadRequest, Message: err.Error()})
+	}
+	userCart := user.Cart
+	totalQuantity := 0
+	for _, cart := range userCart {
+		totalQuantity += cart.OrderQuantity
+	}
+	totalPrice := 0
+	for _, cart := range userCart {
+		product, err := h.ProductRepository.GetProduct(cart.ProductID)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, dto.ErrorResult{Code: http.StatusBadRequest, Message: err.Error()})
+		}
+		multiplied := cart.OrderQuantity * product.Price
+		totalPrice += multiplied
+	}
+
+	var userTransaction models.UserTransactionResponse
+	userTransaction.ID = user.ID
+	userTransaction.Name = user.Name
+	userTransaction.Email = user.Email
+
+	var productTransaction []models.ProductTransaction
+	for _, cart := range userCart {
+		product, err := h.ProductRepository.GetProduct(cart.ProductID)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, dto.ErrorResult{Code: http.StatusBadRequest, Message: err.Error()})
+		}
+		var cartNew models.ProductTransaction
+		cartNew.ProductID = product.ID
+		cartNew.ProductName = product.Name
+		cartNew.ProductPrice = product.Price
+		cartNew.OrderQuantity = cart.OrderQuantity
+		productTransaction = append(productTransaction, cartNew)
+	}
 
 	transaction := models.Transaction{
-		ProductID:     productId,
-		OrderQuantity: request.OrderQuantity,
-		UserID:        int(userId),
+		UserID:             int(userId),
+		User:               userTransaction,
+		ProductTransaction: productTransaction,
+		TotalQuantity:      totalQuantity,
+		TotalPrice:         totalPrice,
 	}
 
 	data, err := h.TransactionRepository.CreateTransaction(transaction)
@@ -72,41 +125,21 @@ func (h *handlerTransaction) CreateTransaction(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, dto.ErrorResult{Code: http.StatusInternalServerError, Message: err.Error()})
 	}
 
-	return c.JSON(http.StatusOK, dto.SuccessResult{Code: http.StatusOK, Data: convertResponseTransaction(data)})
-}
-
-func (h *handlerTransaction) UpdateTransaction(c echo.Context) error {
-	request := new(transactionsdto.TransactionRequest)
-	if err := c.Bind(&request); err != nil {
-		return c.JSON(http.StatusBadRequest, dto.ErrorResult{Code: http.StatusBadRequest, Message: err.Error()})
-	}
-
-	id, _ := strconv.Atoi(c.Param("id"))
-
-	transaction, err := h.TransactionRepository.GetTransaction(id)
-
+	carts, err := h.CartRepository.FindCarts()
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, dto.ErrorResult{Code: http.StatusBadRequest, Message: err.Error()})
 	}
-
-	if request.ProductID != 0 {
-		transaction.ProductID = request.ProductID
-	}
-
-	if request.OrderQuantity != 0 {
-		transaction.OrderQuantity = request.OrderQuantity
-	}
-
-	userLogin := c.Get("userLogin")
-	userId := userLogin.(jwt.MapClaims)["id"].(float64)
-
-	if request.UserID != 0 {
-		transaction.UserID = int(userId)
-	}
-
-	data, err := h.TransactionRepository.UpdateTransaction(transaction)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dto.ErrorResult{Code: http.StatusInternalServerError, Message: err.Error()})
+	for _, cart := range carts {
+		if cart.UserID == int(userId) {
+			cartToDelete, err := h.CartRepository.GetCart(cart.ID)
+			if err != nil {
+				return c.JSON(http.StatusBadRequest, dto.ErrorResult{Code: http.StatusBadRequest, Message: err.Error()})
+			}
+			_, err = h.CartRepository.DeleteCart(cartToDelete)
+			if err != nil {
+				return c.JSON(http.StatusBadRequest, dto.ErrorResult{Code: http.StatusBadRequest, Message: err.Error()})
+			}
+		}
 	}
 
 	return c.JSON(http.StatusOK, dto.SuccessResult{Code: http.StatusOK, Data: convertResponseTransaction(data)})
@@ -130,8 +163,8 @@ func (h *handlerTransaction) DeleteTransaction(c echo.Context) error {
 
 func convertResponseTransaction(u models.Transaction) transactionsdto.TransactionResponse {
 	return transactionsdto.TransactionResponse{
-		ProductID:     u.ProductID,
-		OrderQuantity: u.OrderQuantity,
 		UserID:        u.UserID,
+		TotalQuantity: u.TotalQuantity,
+		TotalPrice:    u.TotalPrice,
 	}
 }

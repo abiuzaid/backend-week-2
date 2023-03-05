@@ -3,34 +3,23 @@ package models
 import "time"
 
 type Transaction struct {
-	ID            int                        `json:"id" gorm:"primary_key:auto_increment"`
-	UserID        int                        `json:"user_id"`
-	User          UsersTransactionResponse   `json:"user"`
-	ProductID     int                        `json:"product_id" gorm:"type: int"`
-	Product       ProductTransactionResponse `json:"product"`
-	OrderQuantity int                        `json:"order_quantity" gorm:"type: int"`
-	CreatedAt     time.Time                  `json:"-"`
-	UpdatedAt     time.Time                  `json:"-"`
+	ID                 int                     `json:"id" gorm:"primary_key:auto_increment"`
+	UserID             int                     `json:"-"`
+	User               UserTransactionResponse `json:"user"`
+	ProductTransaction []ProductTransaction    `json:"products" gorm:"foreignKey:TransactionID"`
+	TotalQuantity      int                     `json:"total_quantity" gorm:"type: int"`
+	TotalPrice         int                     `json:"total_price" gorm:"type: int"`
+	CreatedAt          time.Time               `json:"-"`
+	UpdatedAt          time.Time               `json:"-"`
 }
 
 type TransactionUSerResponse struct {
-	ProductID     int                        `json:"product_id" gorm:"type: int"`
-	Product       ProductTransactionResponse `json:"product"`
-	OrderQuantity int                        `json:"order_quantity" gorm:"type: int"`
-	UserID        int                        `json:"-"`
-}
-
-type TransactionProductResponse struct {
-	ProductID     int                      `json:"-"`
-	UserID        int                      `json:"user_id" gorm:"type: int"`
-	User          UsersTransactionResponse `json:"user"`
-	OrderQuantity int                      `json:"order_quantity" gorm:"type: int"`
+	ID            int `json:"id"`
+	UserID        int `json:"-"`
+	TotalQuantity int `json:"total_quantity"`
+	TotalPrice    int `json:"total_price"`
 }
 
 func (TransactionUSerResponse) TableName() string {
-	return "transactions"
-}
-
-func (TransactionProductResponse) TableName() string {
 	return "transactions"
 }

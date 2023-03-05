@@ -2,6 +2,7 @@ package routes
 
 import (
 	"backEnd/handlers"
+	"backEnd/pkg/middleware"
 	"backEnd/pkg/mysql"
 	"backEnd/repositories"
 
@@ -12,8 +13,8 @@ func ProfileRoutes(e *echo.Group) {
 	ProfileRepository := repositories.RepositoryProfile(mysql.DB)
 	h := handlers.HandlerProfile(ProfileRepository)
 
-	e.GET("/profile/:id", h.GetProfile)
-	e.GET("/profile", h.FindProfile)
-	e.POST("/profile", h.CreateProfil)
-
+	e.GET("/profile/:id", middleware.Auth(h.GetProfile))
+	e.POST("/profile", middleware.Auth(middleware.UploadFile(h.CreateProfile)))
+	e.PATCH("/profile", middleware.Auth(middleware.UploadFile(h.UpdateProfile)))
+	e.DELETE("/profile", middleware.Auth(h.DeleteProfile))
 }
